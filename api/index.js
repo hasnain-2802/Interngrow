@@ -18,16 +18,27 @@ app.get('/', (req, res) => {
   res.send('InternGrow Auth API is running');
 });
 
-// Connect to MongoDB once, reused across function invocations
-let isConnected = false;
+let cachedConnection = null;
+
 const connectDB = async () => {
-  if (isConnected) return;
-  await mongoose.connect(process.env.MONGO_URI);
-  isConnected = true;
-  console.log('MongoDB connected');
+  if (cachedConnection && mongoose.connection.readyState === 1) {
+    return cachedConnection;
+  }
+
+  cachedConnection = await mongoose.connect(process.env.MONGO_URI, {
+    serverSelectionTimeoutMS: 10000,
+    bufferCommands: false,
+  });
+
+  return cachedConnection;
 };
 
 module.exports = async (req, res) => {
-  await connectDB();
+  try {
+    await connectDB();
+  } catch (error) {
+    console.error('DB connection failed:', error.message);
+    return res.status(500).json({ message: 'Database connection failed' });
+  }
   return app(req, res);
 };
